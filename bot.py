@@ -6,7 +6,7 @@ import psycopg2
 BOT_TOKEN = "7589439068:AAEKY8-QbI77fClMaFeyHMHx4jo-XV2stIk"
 
 # اتصال به دیتابیس
-DATABASE_URL = "postgresql://postgres:lrTqNBVaKGGjvBFoitXciBYokSsatYJv@postgres.railway.internal:5432/railway"
+DATABASE_URL = "postgresql://postgres:ncHfrUsbklNeuzoPVUAqZhKeiPmAdZsw@postgres.railway.internal:5432/railway"
 conn = psycopg2.connect(DATABASE_URL)
 cursor = conn.cursor()
 
@@ -34,63 +34,59 @@ def create_tables():
 
 create_tables()
 
-# مراحل ثبت معلم و ارسال پیام
-REGISTER_TEACHER, SELECT_TEACHER, SEND_MESSAGE = range(3)
+# مراحل ارسال پیام
+SELECT_TEACHER, SEND_MESSAGE = range(2)
 
 # شروع ربات
 async def start(update: Update, context: CallbackContext):
-    reply_keyboard = [["ثبت‌نام به عنوان معلم", "ارسال پیام به معلم"]]
+    reply_keyboard = [["ارسال پیام به معلم", "معلم هستم (مشاهده پیام‌ها)"]]
     await update.message.reply_text(
         "سلام! لطفاً یکی از گزینه‌های زیر را انتخاب کنید:",
         reply_markup=ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True)
     )
-    return REGISTER_TEACHER
-
-# ثبت‌نام معلم
-async def register_teacher(update: Update, context: CallbackContext):
-    if update.message.text == "ثبت‌نام به عنوان معلم":
-        telegram_username = update.effective_user.username
-        if not telegram_username:
-            await update.message.reply_text("برای ثبت‌نام باید یک نام کاربری تلگرام داشته باشید.")
-            return ConversationHandler.END
-
-        await update.message.reply_text("لطفاً نام و نام خانوادگی خود را وارد کنید (به‌صورت: علی رضایی):")
-        context.user_data['telegram_username'] = telegram_username
-        return REGISTER_TEACHER
-    elif update.message.text == "ارسال پیام به معلم":
-        return await list_teachers(update, context)
-
-async def save_teacher(update: Update, context: CallbackContext):
-    try:
-        first_name, last_name = update.message.text.split(' ', 1)
-        telegram_username = context.user_data['telegram_username']
-        cursor.execute("""
-        INSERT INTO teachers (telegram_username, first_name, last_name)
-        VALUES (%s, %s, %s)
-        """, (telegram_username, first_name, last_name))
-        conn.commit()
-        await update.message.reply_text("شما با موفقیت به عنوان معلم ثبت‌نام شدید!")
-    except ValueError:
-        await update.message.reply_text("فرمت نام معتبر نیست. لطفاً نام و نام خانوادگی خود را وارد کنید (مثلاً: علی رضایی).")
-        return REGISTER_TEACHER
-
-    return ConversationHandler.END
-
-# لیست معلمان برای انتخاب
-async def list_teachers(update: Update, context: CallbackContext):
-    cursor.execute("SELECT id, first_name, last_name FROM teachers")
-    teachers = cursor.fetchall()
-
-    if not teachers:
-        await update.message.reply_text("هیچ معلمی ثبت‌نام نکرده است.")
-        return ConversationHandler.END
-
-    teacher_list = "\n".join([f"{idx + 1}. {teacher[1]} {teacher[2]}" for idx, teacher in enumerate(teachers)])
-    await update.message.reply_text(f"یکی از معلمان زیر را انتخاب کنید:\n{teacher_list}\n\nلطفاً شماره معلم را وارد کنید:")
-    context.user_data['teachers'] = teachers
     return SELECT_TEACHER
 
-# انتخاب معلم
+# نمایش لیست معلمان برای انتخاب
+async def list_teachers(update: Update, context: CallbackContext):
+    if update.message.text == "ارسال پیام به معلم":
+        cursor.execute("SELECT id, first_name, last_name FROM teachers")
+        teachers = cursor.fetchall()
+
+        if not teachers:
+            await update.message.reply_text("هیچ معلمی ثبت‌نام نکرده است.")
+            return ConversationHandler.END
+
+        teacher_list = "\n".join([f"{idx + 1}. {teacher[1]} {teacher[2]}" for idx, teacher in enumerate(teachers)])
+        await update.message.reply_text(f"یکی از معلمان زیر را انتخاب کنید:\n{teacher_list}\n\nلطفاً شماره معلم را وارد کنید:")
+        context.user_data['teachers'] = teachers
+        return SELECT_TEACHER
+
+    elif update.message.text == "معلم هستم (مشاهده پیام‌ها)":
+        telegram_username = update.effective_user.username
+        if not telegram_username:
+            await update.message.reply_text("برای مشاهده پیام‌ها باید یک نام کاربری تلگرام داشته باشید.")
+            return ConversationHandler.END
+
+        cursor.execute("SELECT id FROM teachers WHERE telegram_username = %s", (telegram_username,))
+        teacher = cursor.fetchone()
+
+        if not teacher:
+            await update.message.reply_text("شما به عنوان معلم ثبت نشده‌اید.")
+            return ConversationHandler.END
+
+        teacher_id = teacher[0]
+        cursor.execute("SELECT message FROM messages WHERE teacher_id = %s", (teacher_id,))
+        messages = cursor.fetchall()
+
+        if not messages:
+            await update.message.reply_text("هیچ پیامی برای شما وجود ندارد.")
+        else:
+            message_list = "\n\n".join([f"پیام {idx + 1}: {msg[0]}" for idx, msg in enumerate(messages)])
+            await update.message.reply_text(f"پیام‌های دریافت‌شده:\n\n{message_list}")
+
+        return ConversationHandler.END
+
+# انتخاب معلم برای ارسال پیام
 async def choose_teacher(update: Update, context: CallbackContext):
     teachers = context.user_data['teachers']
 
@@ -119,16 +115,7 @@ async def send_anonymous_message(update: Update, context: CallbackContext):
     """, (teacher_id, message))
     conn.commit()
 
-    # ارسال پیام به معلم
-    cursor.execute("SELECT telegram_username FROM teachers WHERE id = %s", (teacher_id,))
-    teacher = cursor.fetchone()
-
-    if teacher:
-        await context.bot.send_message(chat_id=f"@{teacher[0]}", text=f"پیام ناشناس:\n{message}")
-        await update.message.reply_text("پیام شما به‌صورت ناشناس ارسال شد!")
-    else:
-        await update.message.reply_text("خطایی رخ داده است. لطفاً دوباره تلاش کنید.")
-
+    await update.message.reply_text("پیام شما به‌صورت ناشناس ارسال شد!")
     return ConversationHandler.END
 
 # تعریف ربات و فرمان‌ها
@@ -137,8 +124,7 @@ app = ApplicationBuilder().token(BOT_TOKEN).build()
 conv_handler = ConversationHandler(
     entry_points=[CommandHandler("start", start)],
     states={
-        REGISTER_TEACHER: [MessageHandler(filters.TEXT & ~filters.COMMAND, register_teacher)],
-        SELECT_TEACHER: [MessageHandler(filters.TEXT & ~filters.COMMAND, choose_teacher)],
+        SELECT_TEACHER: [MessageHandler(filters.TEXT & ~filters.COMMAND, list_teachers)],
         SEND_MESSAGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, send_anonymous_message)],
     },
     fallbacks=[]
