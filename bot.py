@@ -3,13 +3,11 @@ import psycopg2
 import os
 
 # Telegram Bot Token
-
 bot = telebot.TeleBot("7589439068:AAEKY8-QbI77fClMaFeyHMHx4jo-XV2stIk")
 
-# Database URL from Railway environment variables
-
 # Database Connection
-conn = psycopg2.connect("postgresql://postgres:SlqdKUjRiLaoBwGzeNKtyArTLTWLNEgR@:5432/railway")
+DATABASE_URL = "postgresql://postgres:SlqdKUjRiLaoBwGzeNKtyArTLTWLNEgR@:5432/railway"
+conn = psycopg2.connect(DATABASE_URL)
 cursor = conn.cursor()
 
 # Create tables if they don't exist
@@ -43,20 +41,20 @@ create_tables()
 @bot.message_handler(commands=['start'])
 def register_user(message):
     telegram_id = message.chat.id
-    role = None
+    cursor.execute("SELECT role FROM users WHERE telegram_id = %s", (telegram_id,))
+    existing_user = cursor.fetchone()
+
+    if existing_user:
+        bot.send_message(telegram_id, "You are already registered!")
+        return
 
     if message.text == '/start teacher':
-        role = 'teacher'
         bot.send_message(telegram_id, "Please send your first and last name (e.g., John Doe):")
         bot.register_next_step_handler(message, save_teacher_info)
     elif message.text == '/start student':
-        role = 'student'
-        try:
-            cursor.execute("INSERT INTO users (telegram_id, role) VALUES (%s, %s)", (telegram_id, role))
-            conn.commit()
-            bot.send_message(telegram_id, "You have been registered as a student!")
-        except psycopg2.IntegrityError:
-            bot.send_message(telegram_id, "You are already registered.")
+        cursor.execute("INSERT INTO users (telegram_id, role) VALUES (%s, 'student')", (telegram_id,))
+        conn.commit()
+        bot.send_message(telegram_id, "You have been registered as a student!")
     else:
         bot.send_message(telegram_id, "Please specify your role: \n/start teacher\n/start student")
 
@@ -112,10 +110,9 @@ def handle_teacher_selection(message, teachers):
             bot.send_message(telegram_id, "Please enter your message:")
             bot.register_next_step_handler(message, forward_message, selected_teacher_id)
         else:
-            bot.send_message(telegram_id, "Invalid number. Please try again.")
-            choose_teacher(message)  # Re-show the list
+            raise ValueError
     except ValueError:
-        bot.send_message(telegram_id, "Please enter a valid number.")
+        bot.send_message(telegram_id, "Invalid selection. Please enter a valid number.")
         choose_teacher(message)
 
 # Forward anonymous message to teacher
@@ -131,8 +128,14 @@ def forward_message(message, teacher_id):
     conn.commit()
 
     # Fetch teacher info
-    cursor.execute("SELECT telegram_id FROM users WHERE id = %s", (teacher_id,))
-    teacher_telegram_id = cursor.fetchone()[0]
+    cursor.execute("SELECT telegram_id FROM users WHERE id = %s AND role = 'teacher'", (teacher_id,))
+    teacher = cursor.fetchone()
+
+    if not teacher:
+        bot.send_message(student_id, "The selected teacher does not exist.")
+        return
+
+    teacher_telegram_id = teacher[0]
 
     # Send message to teacher
     bot.send_message(teacher_telegram_id, f"Anonymous message from a student:\n{msg}")
@@ -165,4 +168,4 @@ def view_messages(message):
         bot.send_message(telegram_id, f"Message from a student:\n{msg}")
 
 # Start the bot
-bot.polling()
+bot.polling(none_stop=True, interval=0, timeout=20)
