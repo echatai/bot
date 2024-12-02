@@ -30,8 +30,8 @@ def create_tables():
 
 create_tables()
 
-# مراحل
-CHOOSE_ACTION, SELECT_TEACHER, SEND_MESSAGE = range(3)
+# مراحل مکالمه
+CHOOSE_ACTION, SELECT_TEACHER, SEND_MESSAGE, VIEW_MESSAGES = range(4)
 
 # شروع ربات
 async def start(update: Update, context: CallbackContext):
@@ -56,7 +56,7 @@ async def send_message_to_teacher(update: Update, context: CallbackContext):
     context.user_data['teachers'] = teachers
     return SELECT_TEACHER
 
-# پردازش انتخاب معلم
+# انتخاب معلم
 async def process_teacher_selection(update: Update, context: CallbackContext):
     try:
         teachers = context.user_data.get('teachers', [])
@@ -72,7 +72,7 @@ async def process_teacher_selection(update: Update, context: CallbackContext):
         await update.message.reply_text("شماره نامعتبر است. لطفاً دوباره تلاش کنید.")
         return SELECT_TEACHER
 
-# ارسال پیام
+# ارسال پیام نهایی
 async def process_message(update: Update, context: CallbackContext):
     teacher_id = context.user_data.get('selected_teacher_id')
     message = update.message.text.strip()
@@ -90,7 +90,7 @@ async def process_message(update: Update, context: CallbackContext):
     await update.message.reply_text("پیام شما به‌صورت ناشناس ارسال شد!")
     return ConversationHandler.END
 
-# مشاهده پیام‌ها برای معلمان
+# مشاهده پیام‌ها
 async def view_messages(update: Update, context: CallbackContext):
     telegram_username = update.effective_user.username
     if not telegram_username:
@@ -116,9 +116,7 @@ async def view_messages(update: Update, context: CallbackContext):
 
     return ConversationHandler.END
 
-# تعریف ربات و فرمان‌ها
-app = ApplicationBuilder().token("7589439068:AAEKY8-QbI77fClMaFeyHMHx4jo-XV2stIk").build()
-
+# تعریف مسیرهای مکالمه
 conv_handler = ConversationHandler(
     entry_points=[CommandHandler("start", start)],
     states={
@@ -132,6 +130,8 @@ conv_handler = ConversationHandler(
     fallbacks=[CommandHandler("start", start)]
 )
 
+# اجرای ربات
+app = ApplicationBuilder().token("7589439068:AAEKY8-QbI77fClMaFeyHMHx4jo-XV2stIk").build()
 app.add_handler(conv_handler)
 
 print("ربات در حال اجرا است...")
