@@ -6,7 +6,7 @@ import os
 bot = telebot.TeleBot("7589439068:AAEKY8-QbI77fClMaFeyHMHx4jo-XV2stIk")
 
 # Database Connection
-DATABASE_URL = "postgresql://postgres:SlqdKUjRiLaoBwGzeNKtyArTLTWLNEgR@:5432/railway"
+DATABASE_URL = "postgresql://postgres:lrTqNBVaKGGjvBFoitXciBYokSsatYJv@postgres.railway.internal:5432/railway"
 conn = psycopg2.connect(DATABASE_URL)
 cursor = conn.cursor()
 
