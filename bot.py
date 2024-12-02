@@ -1,16 +1,16 @@
-import telebot
+from telegram import Update, ReplyKeyboardMarkup
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackContext, ConversationHandler, filters
 import psycopg2
-import os
 
-# Telegram Bot Token
-bot = telebot.TeleBot("7589439068:AAEKY8-QbI77fClMaFeyHMHx4jo-XV2stIk")
+# توکن ربات تلگرام
+BOT_TOKEN = "7589439068:AAEKY8-QbI77fClMaFeyHMHx4jo-XV2stIk"
 
-# Database Connection
+# اتصال به دیتابیس
 DATABASE_URL = "postgresql://postgres:lrTqNBVaKGGjvBFoitXciBYokSsatYJv@postgres.railway.internal:5432/railway"
 conn = psycopg2.connect(DATABASE_URL)
 cursor = conn.cursor()
 
-# Create tables if they don't exist
+# ایجاد جدول‌ها (در صورت عدم وجود)
 def create_tables():
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS users (
@@ -33,139 +33,165 @@ def create_tables():
     );
     """)
     conn.commit()
-    print("Tables created successfully!")
+    print("جداول با موفقیت ایجاد شدند!")
 
 create_tables()
 
-# Register user: student or teacher
-@bot.message_handler(commands=['start'])
-def register_user(message):
-    telegram_id = message.chat.id
+# مراحل ثبت اطلاعات معلم
+SAVE_TEACHER_INFO, CHOOSE_TEACHER, SEND_MESSAGE = range(3)
+
+# شروع ربات و ثبت‌نام
+async def start(update: Update, context: CallbackContext):
+    telegram_id = str(update.effective_user.id)
     cursor.execute("SELECT role FROM users WHERE telegram_id = %s", (telegram_id,))
-    existing_user = cursor.fetchone()
+    user = cursor.fetchone()
 
-    if existing_user:
-        bot.send_message(telegram_id, "You are already registered!")
-        return
+    if user:
+        await update.message.reply_text("شما قبلاً ثبت‌نام کرده‌اید!")
+        return ConversationHandler.END
 
-    if message.text == '/start teacher':
-        bot.send_message(telegram_id, "Please send your first and last name (e.g., John Doe):")
-        bot.register_next_step_handler(message, save_teacher_info)
-    elif message.text == '/start student':
+    reply_keyboard = [["دانش‌آموز", "معلم"]]
+    await update.message.reply_text(
+        "لطفاً نقش خود را انتخاب کنید:\n\n"
+        "1. دانش‌آموز\n"
+        "2. معلم",
+        reply_markup=ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True)
+    )
+    return SAVE_TEACHER_INFO
+
+async def save_teacher_info(update: Update, context: CallbackContext):
+    role = update.message.text
+    telegram_id = str(update.effective_user.id)
+
+    if role == "معلم":
+        await update.message.reply_text("لطفاً نام و نام خانوادگی خود را وارد کنید (به‌صورت: علی رضایی):")
+        context.user_data['role'] = 'teacher'
+        return SAVE_TEACHER_INFO
+
+    elif role == "دانش‌آموز":
         cursor.execute("INSERT INTO users (telegram_id, role) VALUES (%s, 'student')", (telegram_id,))
         conn.commit()
-        bot.send_message(telegram_id, "You have been registered as a student!")
-    else:
-        bot.send_message(telegram_id, "Please specify your role: \n/start teacher\n/start student")
+        await update.message.reply_text("شما به‌عنوان دانش‌آموز ثبت‌نام شدید!")
+        return ConversationHandler.END
 
-def save_teacher_info(message):
-    telegram_id = message.chat.id
+    else:
+        await update.message.reply_text("نقش نامعتبر است. لطفاً یکی از گزینه‌های موجود را انتخاب کنید.")
+        return SAVE_TEACHER_INFO
+
+async def complete_teacher_registration(update: Update, context: CallbackContext):
+    telegram_id = str(update.effective_user.id)
     try:
-        first_name, last_name = message.text.split(' ', 1)
+        first_name, last_name = update.message.text.split(' ', 1)
         cursor.execute("""
         INSERT INTO users (telegram_id, role, first_name, last_name)
         VALUES (%s, 'teacher', %s, %s)
         """, (telegram_id, first_name, last_name))
         conn.commit()
-        bot.send_message(telegram_id, "You have been registered as a teacher!")
+        await update.message.reply_text("شما به‌عنوان معلم ثبت‌نام شدید!")
     except ValueError:
-        bot.send_message(telegram_id, "Invalid format. Please send your first and last name separated by a space.")
+        await update.message.reply_text("فرمت نام معتبر نیست. لطفاً نام و نام خانوادگی خود را وارد کنید (مثلاً: علی رضایی).")
+        return SAVE_TEACHER_INFO
 
-# List teachers for students to choose
-@bot.message_handler(commands=['choose_teacher'])
-def choose_teacher(message):
-    telegram_id = message.chat.id
+    return ConversationHandler.END
 
-    # Ensure user is a student
+# لیست معلمان برای انتخاب
+async def choose_teacher(update: Update, context: CallbackContext):
+    telegram_id = str(update.effective_user.id)
+
     cursor.execute("SELECT role FROM users WHERE telegram_id = %s", (telegram_id,))
     result = cursor.fetchone()
     if not result or result[0] != 'student':
-        bot.send_message(telegram_id, "This command is only for students.")
-        return
+        await update.message.reply_text("این دستور فقط برای دانش‌آموزان است.")
+        return ConversationHandler.END
 
-    # Fetch teacher list
     cursor.execute("SELECT id, first_name, last_name FROM users WHERE role = 'teacher'")
     teachers = cursor.fetchall()
 
     if not teachers:
-        bot.send_message(telegram_id, "No teachers are currently registered.")
-        return
+        await update.message.reply_text("هیچ معلمی ثبت‌نام نکرده است.")
+        return ConversationHandler.END
 
-    # Display teachers with numbers
     teacher_list = "\n".join([f"{idx + 1}. {teacher[1]} {teacher[2]}" for idx, teacher in enumerate(teachers)])
-    bot.send_message(telegram_id, f"Choose one of the following teachers by number:\n{teacher_list}")
-    bot.send_message(telegram_id, "Please enter the number of your chosen teacher:")
-    bot.register_next_step_handler(message, handle_teacher_selection, teachers)
+    await update.message.reply_text(f"یکی از معلمان زیر را انتخاب کنید:\n{teacher_list}\n\nلطفاً شماره معلم را وارد کنید:")
+    context.user_data['teachers'] = teachers
+    return CHOOSE_TEACHER
 
-def handle_teacher_selection(message, teachers):
-    telegram_id = message.chat.id
+async def send_message_to_teacher(update: Update, context: CallbackContext):
+    telegram_id = str(update.effective_user.id)
+    teachers = context.user_data['teachers']
 
     try:
-        selected_index = int(message.text) - 1
+        selected_index = int(update.message.text) - 1
         if 0 <= selected_index < len(teachers):
             selected_teacher = teachers[selected_index]
-            selected_teacher_id = selected_teacher[0]
-
-            bot.send_message(telegram_id, f"You have selected {selected_teacher[1]} {selected_teacher[2]}!")
-            bot.send_message(telegram_id, "Please enter your message:")
-            bot.register_next_step_handler(message, forward_message, selected_teacher_id)
+            context.user_data['selected_teacher'] = selected_teacher[0]
+            await update.message.reply_text(f"شما معلم {selected_teacher[1]} {selected_teacher[2]} را انتخاب کردید!\nلطفاً پیام خود را وارد کنید:")
+            return SEND_MESSAGE
         else:
             raise ValueError
     except ValueError:
-        bot.send_message(telegram_id, "Invalid selection. Please enter a valid number.")
-        choose_teacher(message)
+        await update.message.reply_text("شماره نامعتبر است. لطفاً دوباره تلاش کنید.")
+        return CHOOSE_TEACHER
 
-# Forward anonymous message to teacher
-def forward_message(message, teacher_id):
-    student_id = message.chat.id
-    msg = message.text
+async def forward_message(update: Update, context: CallbackContext):
+    student_id = str(update.effective_user.id)
+    teacher_id = context.user_data['selected_teacher']
+    message = update.message.text
 
-    # Save message in database
     cursor.execute("""
     INSERT INTO messages (teacher_id, student_id, message)
     VALUES (%s, %s, %s)
-    """, (teacher_id, student_id, msg))
+    """, (teacher_id, student_id, message))
     conn.commit()
 
-    # Fetch teacher info
-    cursor.execute("SELECT telegram_id FROM users WHERE id = %s AND role = 'teacher'", (teacher_id,))
+    cursor.execute("SELECT telegram_id FROM users WHERE id = %s", (teacher_id,))
     teacher = cursor.fetchone()
 
-    if not teacher:
-        bot.send_message(student_id, "The selected teacher does not exist.")
-        return
+    if teacher:
+        await context.bot.send_message(chat_id=teacher[0], text=f"پیام ناشناس از یک دانش‌آموز:\n{message}")
+        await update.message.reply_text("پیام شما به‌صورت ناشناس ارسال شد!")
+    else:
+        await update.message.reply_text("خطایی رخ داده است. لطفاً دوباره تلاش کنید.")
 
-    teacher_telegram_id = teacher[0]
+    return ConversationHandler.END
 
-    # Send message to teacher
-    bot.send_message(teacher_telegram_id, f"Anonymous message from a student:\n{msg}")
-    bot.send_message(student_id, "Your message has been sent anonymously!")
+# مشاهده پیام‌ها برای معلمان
+async def my_messages(update: Update, context: CallbackContext):
+    telegram_id = str(update.effective_user.id)
 
-# View messages for teachers
-@bot.message_handler(commands=['my_messages'])
-def view_messages(message):
-    telegram_id = message.chat.id
-
-    # Ensure user is a teacher
     cursor.execute("SELECT id FROM users WHERE telegram_id = %s AND role = 'teacher'", (telegram_id,))
     teacher = cursor.fetchone()
     if not teacher:
-        bot.send_message(telegram_id, "This command is only for teachers.")
+        await update.message.reply_text("این دستور فقط برای معلمان است.")
         return
 
     teacher_id = teacher[0]
-    cursor.execute("""
-    SELECT student_id, message FROM messages WHERE teacher_id = %s
-    """, (teacher_id,))
+    cursor.execute("SELECT student_id, message FROM messages WHERE teacher_id = %s", (teacher_id,))
     messages = cursor.fetchall()
 
     if not messages:
-        bot.send_message(telegram_id, "You have no messages.")
+        await update.message.reply_text("پیامی دریافت نکرده‌اید.")
         return
 
-    # Display messages
-    for student_id, msg in messages:
-        bot.send_message(telegram_id, f"Message from a student:\n{msg}")
+    for _, msg in messages:
+        await update.message.reply_text(f"پیام از یک دانش‌آموز:\n{msg}")
 
-# Start the bot
-bot.polling(none_stop=True, interval=0, timeout=20)
+# تعریف ربات و فرمان‌ها
+app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+conv_handler = ConversationHandler(
+    entry_points=[CommandHandler("start", start)],
+    states={
+        SAVE_TEACHER_INFO: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_teacher_info)],
+        CHOOSE_TEACHER: [MessageHandler(filters.TEXT & ~filters.COMMAND, send_message_to_teacher)],
+        SEND_MESSAGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, forward_message)],
+    },
+    fallbacks=[]
+)
+
+app.add_handler(conv_handler)
+app.add_handler(CommandHandler("choose_teacher", choose_teacher))
+app.add_handler(CommandHandler("my_messages", my_messages))
+
+print("ربات در حال اجرا است...")
+app.run_polling()
