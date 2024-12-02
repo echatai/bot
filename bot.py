@@ -35,22 +35,20 @@ async def student_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("هیچ معلم فعالی در حال حاضر وجود ندارد.")
 
 async def send_anonymous_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    teacher_name = update.message.text.strip()  # حذف فضای خالی اضافی
-
-    # بازیابی لیست معلم‌ها از user_data
-    teachers = context.user_data.get('teachers', {})
+    teacher_name = update.message.text.strip()  # حذف فضای خالی اضافی از نام ورودی
+    teachers = context.user_data.get('teachers', {})  # لیست معلم‌ها از user_data
     
     if not teachers:
         await update.message.reply_text("خطایی رخ داده است. لطفاً دوباره /start را وارد کنید.")
         return
 
+    # مطابقت نام معلم با کلید ذخیره‌شده
     teacher = teachers.get(teacher_name)
 
     if teacher:
-        context.user_data['selected_teacher'] = teacher
+        context.user_data['selected_teacher'] = teacher  # ذخیره اطلاعات معلم انتخاب‌شده
         await update.message.reply_text("پیام خود را وارد کنید:")
     else:
-        # پیام اشکال‌زدایی برای نمایش نام معلم‌های موجود
         available_teachers = ", ".join(teachers.keys())
         await update.message.reply_text(
             f"معلم انتخاب‌شده یافت نشد. لطفاً دوباره تلاش کنید.\n"
