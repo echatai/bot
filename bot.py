@@ -37,8 +37,8 @@ def create_tables():
 
 create_tables()
 
-# مراحل ثبت اطلاعات معلم
-SAVE_TEACHER_INFO, CHOOSE_TEACHER, SEND_MESSAGE = range(3)
+# مراحل ارسال پیام
+CHOOSE_TEACHER, SEND_MESSAGE = range(2)
 
 # شروع ربات و ثبت‌نام
 async def start(update: Update, context: CallbackContext):
@@ -47,7 +47,7 @@ async def start(update: Update, context: CallbackContext):
     user = cursor.fetchone()
 
     if user:
-        await update.message.reply_text("شما قبلاً ثبت‌نام کرده‌اید!")
+        await update.message.reply_text("شما قبلاً ثبت‌نام کرده‌اید! اکنون می‌توانید از امکانات ربات استفاده کنید.")
         return ConversationHandler.END
 
     reply_keyboard = [["دانش‌آموز", "معلم"]]
@@ -57,28 +57,28 @@ async def start(update: Update, context: CallbackContext):
         "2. معلم",
         reply_markup=ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True)
     )
-    return SAVE_TEACHER_INFO
+    return CHOOSE_TEACHER
 
-async def save_teacher_info(update: Update, context: CallbackContext):
+async def save_role(update: Update, context: CallbackContext):
     role = update.message.text
     telegram_id = str(update.effective_user.id)
 
     if role == "معلم":
         await update.message.reply_text("لطفاً نام و نام خانوادگی خود را وارد کنید (به‌صورت: علی رضایی):")
         context.user_data['role'] = 'teacher'
-        return SAVE_TEACHER_INFO
+        return CHOOSE_TEACHER
 
     elif role == "دانش‌آموز":
         cursor.execute("INSERT INTO users (telegram_id, role) VALUES (%s, 'student')", (telegram_id,))
         conn.commit()
-        await update.message.reply_text("شما به‌عنوان دانش‌آموز ثبت‌نام شدید!")
+        await update.message.reply_text("شما به‌عنوان دانش‌آموز ثبت‌نام شدید! اکنون می‌توانید پیام ارسال کنید.")
         return ConversationHandler.END
 
     else:
         await update.message.reply_text("نقش نامعتبر است. لطفاً یکی از گزینه‌های موجود را انتخاب کنید.")
-        return SAVE_TEACHER_INFO
+        return CHOOSE_TEACHER
 
-async def complete_teacher_registration(update: Update, context: CallbackContext):
+async def save_teacher_info(update: Update, context: CallbackContext):
     telegram_id = str(update.effective_user.id)
     try:
         first_name, last_name = update.message.text.split(' ', 1)
@@ -90,7 +90,7 @@ async def complete_teacher_registration(update: Update, context: CallbackContext
         await update.message.reply_text("شما به‌عنوان معلم ثبت‌نام شدید!")
     except ValueError:
         await update.message.reply_text("فرمت نام معتبر نیست. لطفاً نام و نام خانوادگی خود را وارد کنید (مثلاً: علی رضایی).")
-        return SAVE_TEACHER_INFO
+        return CHOOSE_TEACHER
 
     return ConversationHandler.END
 
@@ -98,12 +98,14 @@ async def complete_teacher_registration(update: Update, context: CallbackContext
 async def choose_teacher(update: Update, context: CallbackContext):
     telegram_id = str(update.effective_user.id)
 
+    # بررسی اینکه کاربر دانش‌آموز است
     cursor.execute("SELECT role FROM users WHERE telegram_id = %s", (telegram_id,))
     result = cursor.fetchone()
     if not result or result[0] != 'student':
         await update.message.reply_text("این دستور فقط برای دانش‌آموزان است.")
         return ConversationHandler.END
 
+    # دریافت لیست معلمان
     cursor.execute("SELECT id, first_name, last_name FROM users WHERE role = 'teacher'")
     teachers = cursor.fetchall()
 
@@ -111,6 +113,7 @@ async def choose_teacher(update: Update, context: CallbackContext):
         await update.message.reply_text("هیچ معلمی ثبت‌نام نکرده است.")
         return ConversationHandler.END
 
+    # نمایش لیست معلمان
     teacher_list = "\n".join([f"{idx + 1}. {teacher[1]} {teacher[2]}" for idx, teacher in enumerate(teachers)])
     await update.message.reply_text(f"یکی از معلمان زیر را انتخاب کنید:\n{teacher_list}\n\nلطفاً شماره معلم را وارد کنید:")
     context.user_data['teachers'] = teachers
@@ -138,12 +141,14 @@ async def forward_message(update: Update, context: CallbackContext):
     teacher_id = context.user_data['selected_teacher']
     message = update.message.text
 
+    # ذخیره پیام در دیتابیس
     cursor.execute("""
     INSERT INTO messages (teacher_id, student_id, message)
     VALUES (%s, %s, %s)
     """, (teacher_id, student_id, message))
     conn.commit()
 
+    # ارسال پیام به معلم
     cursor.execute("SELECT telegram_id FROM users WHERE id = %s", (teacher_id,))
     teacher = cursor.fetchone()
 
@@ -155,35 +160,13 @@ async def forward_message(update: Update, context: CallbackContext):
 
     return ConversationHandler.END
 
-# مشاهده پیام‌ها برای معلمان
-async def my_messages(update: Update, context: CallbackContext):
-    telegram_id = str(update.effective_user.id)
-
-    cursor.execute("SELECT id FROM users WHERE telegram_id = %s AND role = 'teacher'", (telegram_id,))
-    teacher = cursor.fetchone()
-    if not teacher:
-        await update.message.reply_text("این دستور فقط برای معلمان است.")
-        return
-
-    teacher_id = teacher[0]
-    cursor.execute("SELECT student_id, message FROM messages WHERE teacher_id = %s", (teacher_id,))
-    messages = cursor.fetchall()
-
-    if not messages:
-        await update.message.reply_text("پیامی دریافت نکرده‌اید.")
-        return
-
-    for _, msg in messages:
-        await update.message.reply_text(f"پیام از یک دانش‌آموز:\n{msg}")
-
 # تعریف ربات و فرمان‌ها
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 
 conv_handler = ConversationHandler(
     entry_points=[CommandHandler("start", start)],
     states={
-        SAVE_TEACHER_INFO: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_teacher_info)],
-        CHOOSE_TEACHER: [MessageHandler(filters.TEXT & ~filters.COMMAND, send_message_to_teacher)],
+        CHOOSE_TEACHER: [MessageHandler(filters.TEXT & ~filters.COMMAND, choose_teacher)],
         SEND_MESSAGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, forward_message)],
     },
     fallbacks=[]
@@ -191,7 +174,6 @@ conv_handler = ConversationHandler(
 
 app.add_handler(conv_handler)
 app.add_handler(CommandHandler("choose_teacher", choose_teacher))
-app.add_handler(CommandHandler("my_messages", my_messages))
 
 print("ربات در حال اجرا است...")
 app.run_polling()
