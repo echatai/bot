@@ -7,10 +7,9 @@ import os
 bot = telebot.TeleBot("7589439068:AAEKY8-QbI77fClMaFeyHMHx4jo-XV2stIk")
 
 # Database URL from Railway environment variables
-DATABASE_URL = os.getenv("DATABASE_URL")
 
 # Database Connection
-conn = psycopg2.connect(DATABASE_URL)
+conn = psycopg2.connect("postgresql://postgres:SlqdKUjRiLaoBwGzeNKtyArTLTWLNEgR@:5432/railway")
 cursor = conn.cursor()
 
 # Create tables if they don't exist
