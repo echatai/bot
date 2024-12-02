@@ -49,7 +49,7 @@ async def send_message_to_teacher(update: Update, context: CallbackContext):
 
     if not teachers:
         await update.message.reply_text("هیچ معلمی ثبت‌نام نکرده است.")
-        return ConversationHandler.END
+        return CHOOSE_ACTION
 
     teacher_list = "\n".join([f"{idx + 1}. {teacher[1]} {teacher[2]}" for idx, teacher in enumerate(teachers)])
     await update.message.reply_text(f"یکی از معلمان زیر را انتخاب کنید:\n{teacher_list}\n\nلطفاً شماره معلم را وارد کنید:")
@@ -88,21 +88,21 @@ async def process_message(update: Update, context: CallbackContext):
     conn.commit()
 
     await update.message.reply_text("پیام شما به‌صورت ناشناس ارسال شد!")
-    return ConversationHandler.END
+    return CHOOSE_ACTION
 
 # مشاهده پیام‌ها
 async def view_messages(update: Update, context: CallbackContext):
     telegram_username = update.effective_user.username
     if not telegram_username:
         await update.message.reply_text("برای مشاهده پیام‌ها باید یک نام کاربری تلگرام داشته باشید.")
-        return ConversationHandler.END
+        return CHOOSE_ACTION
 
     cursor.execute("SELECT id FROM teachers WHERE telegram_username = %s", (telegram_username,))
     teacher = cursor.fetchone()
 
     if not teacher:
         await update.message.reply_text("شما به عنوان معلم ثبت نشده‌اید.")
-        return ConversationHandler.END
+        return CHOOSE_ACTION
 
     teacher_id = teacher[0]
     cursor.execute("SELECT message FROM messages WHERE teacher_id = %s", (teacher_id,))
@@ -114,7 +114,7 @@ async def view_messages(update: Update, context: CallbackContext):
         message_list = "\n\n".join([f"پیام {idx + 1}: {msg[0]}" for idx, msg in enumerate(messages)])
         await update.message.reply_text(f"پیام‌های دریافت‌شده:\n\n{message_list}")
 
-    return ConversationHandler.END
+    return CHOOSE_ACTION
 
 # تعریف مسیرهای مکالمه
 conv_handler = ConversationHandler(
@@ -127,7 +127,8 @@ conv_handler = ConversationHandler(
         SELECT_TEACHER: [MessageHandler(filters.Regex("^\d+$"), process_teacher_selection)],
         SEND_MESSAGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_message)],
     },
-    fallbacks=[CommandHandler("start", start)]
+    fallbacks=[CommandHandler("start", start)],
+    allow_reentry=True  # این خط اجازه می‌دهد مکالمه به حالت قبلی بازگردد
 )
 
 # اجرای ربات
