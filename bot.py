@@ -6,7 +6,7 @@ import psycopg2
 BOT_TOKEN = "7589439068:AAEKY8-QbI77fClMaFeyHMHx4jo-XV2stIk"
 
 # اتصال به دیتابیس
-DATABASE_URL = "postgresql://postgres:ncHfrUsbklNeuzoPVUAqZhKeiPmAdZsw@postgres.railway.internal:5432/railway"
+ DATABASE_URL = "postgresql://postgres:ncHfrUsbklNeuzoPVUAqZhKeiPmAdZsw@postgres.railway.internal:5432/railway"
 conn = psycopg2.connect(DATABASE_URL)
 cursor = conn.cursor()
 
@@ -35,7 +35,7 @@ def create_tables():
 create_tables()
 
 # مراحل ارسال پیام
-SELECT_TEACHER, SEND_MESSAGE = range(2)
+CHOOSE_ACTION, SELECT_TEACHER, SEND_MESSAGE = range(3)
 
 # شروع ربات
 async def start(update: Update, context: CallbackContext):
@@ -44,9 +44,9 @@ async def start(update: Update, context: CallbackContext):
         "سلام! لطفاً یکی از گزینه‌های زیر را انتخاب کنید:",
         reply_markup=ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True)
     )
-    return SELECT_TEACHER
+    return CHOOSE_ACTION
 
-# نمایش لیست معلمان برای انتخاب
+# لیست معلمان برای انتخاب
 async def list_teachers(update: Update, context: CallbackContext):
     if update.message.text == "ارسال پیام به معلم":
         cursor.execute("SELECT id, first_name, last_name FROM teachers")
@@ -88,9 +88,8 @@ async def list_teachers(update: Update, context: CallbackContext):
 
 # انتخاب معلم برای ارسال پیام
 async def choose_teacher(update: Update, context: CallbackContext):
-    teachers = context.user_data['teachers']
-
     try:
+        teachers = context.user_data['teachers']
         selected_index = int(update.message.text) - 1
         if 0 <= selected_index < len(teachers):
             selected_teacher = teachers[selected_index]
@@ -105,8 +104,12 @@ async def choose_teacher(update: Update, context: CallbackContext):
 
 # ارسال پیام ناشناس
 async def send_anonymous_message(update: Update, context: CallbackContext):
-    teacher_id = context.user_data['selected_teacher_id']
-    message = update.message.text
+    teacher_id = context.user_data.get('selected_teacher_id')
+    message = update.message.text.strip()
+
+    if not message:
+        await update.message.reply_text("پیام نمی‌تواند خالی باشد. لطفاً دوباره تلاش کنید.")
+        return SEND_MESSAGE
 
     # ذخیره پیام در دیتابیس
     cursor.execute("""
@@ -124,7 +127,8 @@ app = ApplicationBuilder().token(BOT_TOKEN).build()
 conv_handler = ConversationHandler(
     entry_points=[CommandHandler("start", start)],
     states={
-        SELECT_TEACHER: [MessageHandler(filters.TEXT & ~filters.COMMAND, list_teachers)],
+        CHOOSE_ACTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, list_teachers)],
+        SELECT_TEACHER: [MessageHandler(filters.TEXT & ~filters.COMMAND, choose_teacher)],
         SEND_MESSAGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, send_anonymous_message)],
     },
     fallbacks=[]
