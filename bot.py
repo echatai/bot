@@ -6,8 +6,7 @@ import psycopg2
 BOT_TOKEN = "7589439068:AAEKY8-QbI77fClMaFeyHMHx4jo-XV2stIk"
 
 # اتصال به دیتابیس
- DATABASE_URL = "postgresql://postgres:ncHfrUsbklNeuzoPVUAqZhKeiPmAdZsw@postgres.railway.internal:5432/railway"
-conn = psycopg2.connect(DATABASE_URL)
+conn = psycopg2.connect("postgresql://postgres:ncHfrUsbklNeuzoPVUAqZhKeiPmAdZsw@postgres.railway.internal:5432/railway")
 cursor = conn.cursor()
 
 # ایجاد جدول‌ها (در صورت عدم وجود)
