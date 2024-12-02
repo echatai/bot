@@ -3,8 +3,8 @@ import psycopg2
 import os
 
 # Telegram Bot Token
-BOT_TOKEN = "YOUR_BOT_TOKEN"
-bot = telebot.TeleBot(BOT_TOKEN)
+
+bot = telebot.TeleBot("7589439068:AAEKY8-QbI77fClMaFeyHMHx4jo-XV2stIk")
 
 # Database URL from Railway environment variables
 DATABASE_URL = os.getenv("DATABASE_URL")
