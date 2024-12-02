@@ -1,8 +1,8 @@
 from sqlalchemy import create_engine, Column, Integer, String, Boolean, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, sessionmaker
 
-# اتصال به پایگاه داده
+# اتصال به پایگاه داده PostgreSQL
 import os
 engine = create_engine("postgresql://postgres:FcFpDSqKJHgzyORXZsGobHJPhVNAwXxW@postgres.railway.internal:5432/railway", echo=True)
 
@@ -18,7 +18,8 @@ class Teacher(Base):
     last_name = Column(String, nullable=False)
     active = Column(Boolean, default=True)
 
-    messages = relationship("Message", back_populates="teacher")
+    # رابطه یک معلم با پیام‌ها
+    messages = relationship("Message", back_populates="teacher", cascade="all, delete-orphan")
 
 # مدل جدول Message
 class Message(Base):
@@ -29,7 +30,12 @@ class Message(Base):
     teacher_id = Column(Integer, ForeignKey('teachers.id'), nullable=False)
     content = Column(String, nullable=False)
 
+    # رابطه پیام‌ها با معلم
     teacher = relationship("Teacher", back_populates="messages")
 
 # ایجاد جداول در پایگاه داده
 Base.metadata.create_all(engine)
+
+# تنظیمات Session برای ارتباط با پایگاه داده
+Session = sessionmaker(bind=engine)
+session = Session()
