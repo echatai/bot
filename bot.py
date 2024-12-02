@@ -64,11 +64,13 @@ async def receive_anonymous_message(update: Update, context: ContextTypes.DEFAUL
         await update.message.reply_text("لطفاً ابتدا یک معلم را انتخاب کنید.")
         return
 
+    # Ensure the username is correct
     teacher = session.query(Teacher).filter_by(username=teacher_username).first()
     if not teacher:
         await update.message.reply_text("معلم انتخاب‌شده یافت نشد.")
         return
 
+    # Store the student's Telegram username
     new_message = Message(
         student_telegram_id=update.message.chat.username,  # ثبت username دانش‌آموز
         teacher_id=teacher.id,
