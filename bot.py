@@ -1,4 +1,4 @@
-﻿from telegram import Update, ReplyKeyboardMarkup
+from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 from sqlalchemy.orm import sessionmaker
 from database import engine, Teacher, Message
@@ -70,7 +70,7 @@ def teacher_panel(update: Update, context: CallbackContext):
 
 # تنظیمات اصلی ربات
 def main():
-    updater = Updater(TOKEN)
+    updater = Updater("7589439068:AAEKY8-QbI77fClMaFeyHMHx4jo-XV2stIk")
     dp = updater.dispatcher
 
     dp.add_handler(CommandHandler("start", start))
