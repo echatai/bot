@@ -1,11 +1,15 @@
 from telegram import Update, ReplyKeyboardMarkup
-from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from sqlalchemy.orm import sessionmaker
 from database import engine, Teacher, Message
 
-# تنظیمات
+# تنظیمات دیتابیس
 Session = sessionmaker(bind=engine)
 session = Session()
+
+# توکن ربات
+import os
+TOKEN = os.getenv("BOT_TOKEN")
 
 # دستورات ربات
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -16,18 +20,26 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def student_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     teachers = session.query(Teacher).filter_by(active=True).all()
-    teacher_names = [[teacher.username] for teacher in teachers]
-    if teacher_names:
+    if teachers:
+        # ایجاد لیست معلم‌ها با نام و نام خانوادگی
+        teacher_names = [
+            f"{teacher.first_name} {teacher.last_name}" for teacher in teachers
+        ]
         await update.message.reply_text(
             "یک معلم را انتخاب کنید:",
-            reply_markup=ReplyKeyboardMarkup(teacher_names, one_time_keyboard=True)
+            reply_markup=ReplyKeyboardMarkup(
+                [[name] for name in teacher_names],
+                one_time_keyboard=True
+            )
         )
     else:
         await update.message.reply_text("هیچ معلم فعالی در حال حاضر وجود ندارد.")
 
 async def send_anonymous_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     teacher_name = update.message.text
-    teacher = session.query(Teacher).filter_by(username=teacher_name).first()
+    # جدا کردن نام و نام خانوادگی
+    first_name, last_name = teacher_name.split(" ", 1)
+    teacher = session.query(Teacher).filter_by(first_name=first_name, last_name=last_name).first()
     if teacher:
         context.user_data['selected_teacher'] = teacher
         await update.message.reply_text("پیام خود را وارد کنید:")
@@ -38,7 +50,7 @@ async def receive_anonymous_message(update: Update, context: ContextTypes.DEFAUL
     teacher = context.user_data.get('selected_teacher')
     if teacher:
         new_message = Message(
-            student_telegram_id=str(update.effective_chat.id),
+            student_telegram_id=update.effective_user.username,
             teacher_id=teacher.id,
             content=update.message.text
         )
@@ -49,8 +61,8 @@ async def receive_anonymous_message(update: Update, context: ContextTypes.DEFAUL
         await update.message.reply_text("لطفاً ابتدا یک معلم را انتخاب کنید.")
 
 async def teacher_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
-    teacher = session.query(Teacher).filter_by(telegram_id=str(chat_id)).first()
+    username = update.effective_user.username
+    teacher = session.query(Teacher).filter_by(username=username).first()
     if not teacher:
         await update.message.reply_text("شما به عنوان معلم ثبت نشده‌اید.")
         return
@@ -61,19 +73,35 @@ async def teacher_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("هیچ پیامی برای شما وجود ندارد.")
 
+async def register_teacher(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    username = update.effective_user.username
+    first_name = update.effective_user.first_name or "نام‌ناشناخته"
+    last_name = update.effective_user.last_name or "نام‌خانوادگی‌ناشناخته"
+
+    # بررسی اینکه معلم قبلاً ثبت شده است یا نه
+    existing_teacher = session.query(Teacher).filter_by(username=username).first()
+    if existing_teacher:
+        await update.message.reply_text("شما قبلاً به عنوان معلم ثبت شده‌اید.")
+        return
+
+    # افزودن معلم جدید
+    new_teacher = Teacher(username=username, first_name=first_name, last_name=last_name, active=True)
+    session.add(new_teacher)
+    session.commit()
+
+    await update.message.reply_text("شما با موفقیت به عنوان معلم ثبت شدید.")
+
 # تنظیمات اصلی ربات
 def main():
-    # ساخت اپلیکیشن با توکن
     application = Application.builder().token("7589439068:AAEKY8-QbI77fClMaFeyHMHx4jo-XV2stIk").build()
 
-    # افزودن هندلرها
     application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("register_teacher", register_teacher))
     application.add_handler(MessageHandler(filters.Regex('دانش‌آموز'), student_panel))
     application.add_handler(MessageHandler(filters.Regex('معلم'), teacher_panel))
     application.add_handler(MessageHandler(filters.TEXT & filters.REPLY, send_anonymous_message))
     application.add_handler(MessageHandler(filters.TEXT, receive_anonymous_message))
 
-    # اجرا
     application.run_polling()
 
 if __name__ == "__main__":
