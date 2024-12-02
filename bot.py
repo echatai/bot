@@ -69,7 +69,7 @@ async def process_teacher_selection(update: Update, context: CallbackContext):
         else:
             raise ValueError
     except ValueError:
-        await update.message.reply_text("شماره نامعتبر است. لطفاً دوباره تلاش کنید.")
+        await update.message.reply_text("شماره نامعتبر است. لطفاً یک شماره معتبر را وارد کنید!")
         return SELECT_TEACHER
 
 # ارسال پیام نهایی
@@ -78,7 +78,7 @@ async def process_message(update: Update, context: CallbackContext):
     message = update.message.text.strip()
 
     if not message:
-        await update.message.reply_text("پیام نمی‌تواند خالی باشد. لطفاً دوباره تلاش کنید.")
+        await update.message.reply_text("پیام نمی‌تواند خالی باشد. لطفاً یک پیام وارد کنید.")
         return SEND_MESSAGE
 
     cursor.execute("""
