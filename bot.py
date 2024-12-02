@@ -9,7 +9,7 @@ session = Session()
 
 # توکن ربات
 import os
-TOKEN = os.getenv("BOT_TOKEN")
+
 
 # دستورات ربات
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
