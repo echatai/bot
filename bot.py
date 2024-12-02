@@ -20,33 +20,36 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def student_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     teachers = session.query(Teacher).filter_by(active=True).all()
-    if teachers:
-        teacher_names = [f"{teacher.first_name} {teacher.last_name}" for teacher in teachers]
-        await update.message.reply_text(
-            "یک معلم را انتخاب کنید:",
-            reply_markup=ReplyKeyboardMarkup(
-                [[name] for name in teacher_names],
-                one_time_keyboard=True
-            )
-        )
-        # ذخیره لیست معلم‌ها در user_data برای استفاده در مراحل بعدی
-        context.user_data['teachers'] = {f"{t.first_name} {t.last_name}": t for t in teachers}
-    else:
+
+    if not teachers:
         await update.message.reply_text("هیچ معلم فعالی در حال حاضر وجود ندارد.")
+        return
+
+    # ذخیره معلم‌ها در قالب {نمایش به کاربر: username}
+    context.user_data['teachers'] = {
+        f"{teacher.first_name} {teacher.last_name}": teacher.username for teacher in teachers
+    }
+
+    # نمایش نام و نام خانوادگی معلم‌ها به کاربر
+    teacher_names = list(context.user_data['teachers'].keys())
+    await update.message.reply_text(
+        "یک معلم را انتخاب کنید:",
+        reply_markup=ReplyKeyboardMarkup([teacher_names], one_time_keyboard=True)
+    )
 
 async def send_anonymous_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    teacher_name = update.message.text.strip()  # حذف فضای خالی اضافی از نام ورودی
+    teacher_display_name = update.message.text.strip()  # نام و نام خانوادگی انتخاب‌شده
     teachers = context.user_data.get('teachers', {})  # لیست معلم‌ها از user_data
-    
+
     if not teachers:
         await update.message.reply_text("خطایی رخ داده است. لطفاً دوباره /start را وارد کنید.")
         return
 
-    # مطابقت نام معلم با کلید ذخیره‌شده
-    teacher = teachers.get(teacher_name)
+    # تطابق نام معلم انتخاب‌شده با username
+    teacher_username = teachers.get(teacher_display_name)
 
-    if teacher:
-        context.user_data['selected_teacher'] = teacher  # ذخیره اطلاعات معلم انتخاب‌شده
+    if teacher_username:
+        context.user_data['selected_teacher'] = teacher_username  # ذخیره username معلم انتخاب‌شده
         await update.message.reply_text("پیام خود را وارد کنید:")
     else:
         available_teachers = ", ".join(teachers.keys())
@@ -56,21 +59,28 @@ async def send_anonymous_message(update: Update, context: ContextTypes.DEFAULT_T
         )
 
 
+
 async def receive_anonymous_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    teacher = context.user_data.get('selected_teacher')
-    if teacher:
-        new_message = Message(
-            student_telegram_id=update.effective_user.username,
-            teacher_id=teacher.id,
-            content=update.message.text
-        )
-        session.add(new_message)
-        session.commit()
-        await update.message.reply_text("پیام شما به‌صورت ناشناس ارسال شد.")
-        # پاک کردن معلم انتخاب‌شده از user_data پس از ارسال پیام
-        context.user_data.pop('selected_teacher', None)
-    else:
+    teacher_username = context.user_data.get('selected_teacher')  # username معلم انتخاب‌شده
+
+    if not teacher_username:
         await update.message.reply_text("لطفاً ابتدا یک معلم را انتخاب کنید.")
+        return
+
+    teacher = session.query(Teacher).filter_by(username=teacher_username).first()
+    if not teacher:
+        await update.message.reply_text("معلم انتخاب‌شده یافت نشد.")
+        return
+
+    new_message = Message(
+        student_telegram_id=update.message.chat.username,  # ثبت username دانش‌آموز
+        teacher_id=teacher.id,
+        content=update.message.text
+    )
+    session.add(new_message)
+    session.commit()
+    await update.message.reply_text("پیام شما به‌صورت ناشناس ارسال شد.")
+
 
 async def teacher_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = update.effective_user.username
