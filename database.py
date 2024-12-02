@@ -1,4 +1,4 @@
-﻿from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, create_engine
+from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 
@@ -22,6 +22,6 @@ class Message(Base):
 
 # اتصال به دیتابیس
 import os
-DATABASE_URL = os.getenv("postgresql://postgres:PqwhhtahibvymXyrmJnsqFyoLUOUhrtc@postgres.railway.internal:5432/railway")
-engine = create_engine(DATABASE_URL)
+
+engine = create_engine("postgresql://postgres:PqwhhtahibvymXyrmJnsqFyoLUOUhrtc@postgres.railway.internal:5432/railway")
 Base.metadata.create_all(engine)
