@@ -1,7 +1,6 @@
 from telegram import Update, ReplyKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackContext, filters
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackContext, ConversationHandler, filters
 import psycopg2
-
 
 # اتصال به دیتابیس
 conn = psycopg2.connect("postgresql://postgres:ncHfrUsbklNeuzoPVUAqZhKeiPmAdZsw@postgres.railway.internal:5432/railway")
@@ -31,6 +30,9 @@ def create_tables():
 
 create_tables()
 
+# مراحل
+CHOOSE_ACTION, SELECT_TEACHER, SEND_MESSAGE = range(3)
+
 # شروع ربات
 async def start(update: Update, context: CallbackContext):
     reply_keyboard = [["ارسال پیام به معلم", "معلم هستم (مشاهده پیام‌ها)"]]
@@ -38,6 +40,7 @@ async def start(update: Update, context: CallbackContext):
         "سلام! لطفاً یکی از گزینه‌های زیر را انتخاب کنید:",
         reply_markup=ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True)
     )
+    return CHOOSE_ACTION
 
 # ارسال پیام به معلم
 async def send_message_to_teacher(update: Update, context: CallbackContext):
@@ -46,13 +49,14 @@ async def send_message_to_teacher(update: Update, context: CallbackContext):
 
     if not teachers:
         await update.message.reply_text("هیچ معلمی ثبت‌نام نکرده است.")
-        return
+        return ConversationHandler.END
 
     teacher_list = "\n".join([f"{idx + 1}. {teacher[1]} {teacher[2]}" for idx, teacher in enumerate(teachers)])
     await update.message.reply_text(f"یکی از معلمان زیر را انتخاب کنید:\n{teacher_list}\n\nلطفاً شماره معلم را وارد کنید:")
     context.user_data['teachers'] = teachers
-    context.user_data['action'] = 'send_message'
+    return SELECT_TEACHER
 
+# پردازش انتخاب معلم
 async def process_teacher_selection(update: Update, context: CallbackContext):
     try:
         teachers = context.user_data.get('teachers', [])
@@ -61,19 +65,21 @@ async def process_teacher_selection(update: Update, context: CallbackContext):
             selected_teacher = teachers[selected_index]
             context.user_data['selected_teacher_id'] = selected_teacher[0]
             await update.message.reply_text(f"شما معلم {selected_teacher[1]} {selected_teacher[2]} را انتخاب کردید.\nلطفاً پیام خود را وارد کنید:")
+            return SEND_MESSAGE
         else:
             raise ValueError
     except ValueError:
         await update.message.reply_text("شماره نامعتبر است. لطفاً دوباره تلاش کنید.")
-        return
+        return SELECT_TEACHER
 
+# ارسال پیام
 async def process_message(update: Update, context: CallbackContext):
     teacher_id = context.user_data.get('selected_teacher_id')
     message = update.message.text.strip()
 
     if not message:
         await update.message.reply_text("پیام نمی‌تواند خالی باشد. لطفاً دوباره تلاش کنید.")
-        return
+        return SEND_MESSAGE
 
     cursor.execute("""
     INSERT INTO messages (teacher_id, message)
@@ -82,21 +88,21 @@ async def process_message(update: Update, context: CallbackContext):
     conn.commit()
 
     await update.message.reply_text("پیام شما به‌صورت ناشناس ارسال شد!")
-    await start(update, context)
+    return ConversationHandler.END
 
 # مشاهده پیام‌ها برای معلمان
 async def view_messages(update: Update, context: CallbackContext):
     telegram_username = update.effective_user.username
     if not telegram_username:
         await update.message.reply_text("برای مشاهده پیام‌ها باید یک نام کاربری تلگرام داشته باشید.")
-        return
+        return ConversationHandler.END
 
     cursor.execute("SELECT id FROM teachers WHERE telegram_username = %s", (telegram_username,))
     teacher = cursor.fetchone()
 
     if not teacher:
         await update.message.reply_text("شما به عنوان معلم ثبت نشده‌اید.")
-        return
+        return ConversationHandler.END
 
     teacher_id = teacher[0]
     cursor.execute("SELECT message FROM messages WHERE teacher_id = %s", (teacher_id,))
@@ -108,16 +114,25 @@ async def view_messages(update: Update, context: CallbackContext):
         message_list = "\n\n".join([f"پیام {idx + 1}: {msg[0]}" for idx, msg in enumerate(messages)])
         await update.message.reply_text(f"پیام‌های دریافت‌شده:\n\n{message_list}")
 
-    await start(update, context)
+    return ConversationHandler.END
 
-# تعریف دستورات
+# تعریف ربات و فرمان‌ها
 app = ApplicationBuilder().token("7589439068:AAEKY8-QbI77fClMaFeyHMHx4jo-XV2stIk").build()
 
-app.add_handler(CommandHandler("start", start))
-app.add_handler(MessageHandler(filters.Regex("^ارسال پیام به معلم$"), send_message_to_teacher))
-app.add_handler(MessageHandler(filters.Regex("^\d+$"), process_teacher_selection))
-app.add_handler(MessageHandler(filters.Regex("^.*$") & ~filters.COMMAND, process_message))
-app.add_handler(MessageHandler(filters.Regex("^معلم هستم \(مشاهده پیام‌ها\)$"), view_messages))
+conv_handler = ConversationHandler(
+    entry_points=[CommandHandler("start", start)],
+    states={
+        CHOOSE_ACTION: [
+            MessageHandler(filters.Regex("^ارسال پیام به معلم$"), send_message_to_teacher),
+            MessageHandler(filters.Regex("^معلم هستم \(مشاهده پیام‌ها\)$"), view_messages),
+        ],
+        SELECT_TEACHER: [MessageHandler(filters.Regex("^\d+$"), process_teacher_selection)],
+        SEND_MESSAGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_message)],
+    },
+    fallbacks=[CommandHandler("start", start)]
+)
+
+app.add_handler(conv_handler)
 
 print("ربات در حال اجرا است...")
 app.run_polling()
