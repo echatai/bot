@@ -10,6 +10,7 @@ session = Session()
 # توکن ربات
 import os
 
+
 # دستورات ربات
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
@@ -24,34 +25,29 @@ async def student_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("هیچ معلم فعالی در حال حاضر وجود ندارد.")
         return
 
-    # ذخیره معلم‌ها در قالب {نمایش به کاربر: username}
-    context.user_data['teachers'] = {
-        f"{teacher.first_name} {teacher.last_name}": teacher.username for teacher in teachers
-    }
+    # ذخیره معلم‌ها در قالب لیستی از username
+    context.user_data['teachers'] = {teacher.username for teacher in teachers}
 
-    # نمایش نام و نام خانوادگی معلم‌ها به کاربر
-    teacher_names = list(context.user_data['teachers'].keys())
+    # نمایش username معلم‌ها به کاربر
+    teacher_usernames = list(context.user_data['teachers'])
     await update.message.reply_text(
-        "یک معلم را انتخاب کنید:",
-        reply_markup=ReplyKeyboardMarkup([teacher_names], one_time_keyboard=True)
+        "یک معلم را با استفاده از نام کاربری انتخاب کنید:",
+        reply_markup=ReplyKeyboardMarkup([teacher_usernames], one_time_keyboard=True)
     )
 
 async def send_anonymous_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    teacher_display_name = update.message.text.strip()  # نام و نام خانوادگی انتخاب‌شده
-    teachers = context.user_data.get('teachers', {})  # لیست معلم‌ها از user_data
+    teacher_username = update.message.text.strip()  # username انتخاب‌شده
 
+    teachers = context.user_data.get('teachers', set())  # لیست معلم‌ها از user_data
     if not teachers:
         await update.message.reply_text("خطایی رخ داده است. لطفاً دوباره /start را وارد کنید.")
         return
 
-    # تطابق نام معلم انتخاب‌شده با username
-    teacher_username = teachers.get(teacher_display_name)
-
-    if teacher_username:
+    if teacher_username in teachers:
         context.user_data['selected_teacher'] = teacher_username  # ذخیره username معلم انتخاب‌شده
         await update.message.reply_text("پیام خود را وارد کنید:")
     else:
-        available_teachers = ", ".join(teachers.keys())
+        available_teachers = ", ".join(teachers)
         await update.message.reply_text(
             f"معلم انتخاب‌شده یافت نشد. لطفاً دوباره تلاش کنید.\n"
             f"معلم‌های موجود: {available_teachers}"
@@ -64,13 +60,13 @@ async def receive_anonymous_message(update: Update, context: ContextTypes.DEFAUL
         await update.message.reply_text("لطفاً ابتدا یک معلم را انتخاب کنید.")
         return
 
-    # Ensure the username is correct
+    # Validate the selected username
     teacher = session.query(Teacher).filter_by(username=teacher_username).first()
     if not teacher:
         await update.message.reply_text("معلم انتخاب‌شده یافت نشد.")
         return
 
-    # Store the student's Telegram username
+    # Save the message to the database
     new_message = Message(
         student_telegram_id=update.message.chat.username,  # ثبت username دانش‌آموز
         teacher_id=teacher.id,
@@ -86,6 +82,7 @@ async def teacher_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not teacher:
         await update.message.reply_text("شما به عنوان معلم ثبت نشده‌اید.")
         return
+
     messages = session.query(Message).filter_by(teacher_id=teacher.id).all()
     if messages:
         for msg in messages:
@@ -111,7 +108,7 @@ async def register_teacher(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # تنظیمات اصلی ربات
 def main():
-    application = Application.builder().token("7589439068:AAEKY8-QbI77fClMaFeyHMHx4jo-XV2stIk").build()
+    application = Application.builder().token("YOUR_BOT_TOKEN").build()
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("register_teacher", register_teacher))
@@ -121,6 +118,7 @@ def main():
     application.add_handler(MessageHandler(filters.TEXT, receive_anonymous_message))
 
     application.run_polling()
+
 
 if __name__ == "__main__":
     main()
