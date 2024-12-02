@@ -108,7 +108,7 @@ async def register_teacher(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # تنظیمات اصلی ربات
 def main():
-    application = Application.builder().token("YOUR_BOT_TOKEN").build()
+    application = Application.builder().token("7589439068:AAEKY8-QbI77fClMaFeyHMHx4jo-XV2stIk").build()
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("register_teacher", register_teacher))
