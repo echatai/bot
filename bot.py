@@ -10,7 +10,6 @@ session = Session()
 # توکن ربات
 import os
 
-
 # دستورات ربات
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
@@ -58,8 +57,6 @@ async def send_anonymous_message(update: Update, context: ContextTypes.DEFAULT_T
             f"معلم‌های موجود: {available_teachers}"
         )
 
-
-
 async def receive_anonymous_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     teacher_username = context.user_data.get('selected_teacher')  # username معلم انتخاب‌شده
 
@@ -80,7 +77,6 @@ async def receive_anonymous_message(update: Update, context: ContextTypes.DEFAUL
     session.add(new_message)
     session.commit()
     await update.message.reply_text("پیام شما به‌صورت ناشناس ارسال شد.")
-
 
 async def teacher_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = update.effective_user.username
