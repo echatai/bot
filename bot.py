@@ -21,10 +21,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def student_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     teachers = session.query(Teacher).filter_by(active=True).all()
     if teachers:
-        # ایجاد لیست معلم‌ها با نام و نام خانوادگی
-        teacher_names = [
-            f"{teacher.first_name} {teacher.last_name}" for teacher in teachers
-        ]
+        teacher_names = [f"{teacher.first_name} {teacher.last_name}" for teacher in teachers]
         await update.message.reply_text(
             "یک معلم را انتخاب کنید:",
             reply_markup=ReplyKeyboardMarkup(
@@ -32,19 +29,23 @@ async def student_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 one_time_keyboard=True
             )
         )
+        # ذخیره لیست معلم‌ها در user_data برای استفاده در مراحل بعدی
+        context.user_data['teachers'] = {f"{t.first_name} {t.last_name}": t for t in teachers}
     else:
         await update.message.reply_text("هیچ معلم فعالی در حال حاضر وجود ندارد.")
 
 async def send_anonymous_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     teacher_name = update.message.text
-    # جدا کردن نام و نام خانوادگی
-    first_name, last_name = teacher_name.split(" ", 1)
-    teacher = session.query(Teacher).filter_by(first_name=first_name, last_name=last_name).first()
+
+    # بازیابی معلم انتخاب‌شده از user_data
+    teachers = context.user_data.get('teachers', {})
+    teacher = teachers.get(teacher_name)
+
     if teacher:
         context.user_data['selected_teacher'] = teacher
         await update.message.reply_text("پیام خود را وارد کنید:")
     else:
-        await update.message.reply_text("معلم انتخاب‌شده یافت نشد.")
+        await update.message.reply_text("معلم انتخاب‌شده یافت نشد. لطفاً دوباره تلاش کنید.")
 
 async def receive_anonymous_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     teacher = context.user_data.get('selected_teacher')
@@ -57,6 +58,8 @@ async def receive_anonymous_message(update: Update, context: ContextTypes.DEFAUL
         session.add(new_message)
         session.commit()
         await update.message.reply_text("پیام شما به‌صورت ناشناس ارسال شد.")
+        # پاک کردن معلم انتخاب‌شده از user_data پس از ارسال پیام
+        context.user_data.pop('selected_teacher', None)
     else:
         await update.message.reply_text("لطفاً ابتدا یک معلم را انتخاب کنید.")
 
@@ -78,13 +81,11 @@ async def register_teacher(update: Update, context: ContextTypes.DEFAULT_TYPE):
     first_name = update.effective_user.first_name or "نام‌ناشناخته"
     last_name = update.effective_user.last_name or "نام‌خانوادگی‌ناشناخته"
 
-    # بررسی اینکه معلم قبلاً ثبت شده است یا نه
     existing_teacher = session.query(Teacher).filter_by(username=username).first()
     if existing_teacher:
         await update.message.reply_text("شما قبلاً به عنوان معلم ثبت شده‌اید.")
         return
 
-    # افزودن معلم جدید
     new_teacher = Teacher(username=username, first_name=first_name, last_name=last_name, active=True)
     session.add(new_teacher)
     session.commit()
@@ -99,7 +100,7 @@ def main():
     application.add_handler(CommandHandler("register_teacher", register_teacher))
     application.add_handler(MessageHandler(filters.Regex('دانش‌آموز'), student_panel))
     application.add_handler(MessageHandler(filters.Regex('معلم'), teacher_panel))
-    application.add_handler(MessageHandler(filters.TEXT & filters.REPLY, send_anonymous_message))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, send_anonymous_message))
     application.add_handler(MessageHandler(filters.TEXT, receive_anonymous_message))
 
     application.run_polling()
