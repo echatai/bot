@@ -272,6 +272,6 @@ conv_handler = ConversationHandler(
 )
 
 # اجرای ربات
-app = ApplicationBuilder().token("YOUR_TELEGRAM_BOT_TOKEN").build()
+app = ApplicationBuilder().token("7589439068:AAEKY8-QbI77fClMaFeyHMHx4jo-XV2stIk").build()
 app.add_handler(conv_handler)
 
