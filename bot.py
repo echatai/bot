@@ -1,8 +1,13 @@
+import logging
+import asyncio
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackContext, ConversationHandler, filters
 import psycopg2
-from psycopg2 import sql
 import bcrypt
+
+# تنظیمات لاگ
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # اتصال به دیتابیس
 conn = psycopg2.connect("postgresql://postgres:WwsdWwGXSFWbTbcyRvSchqpltUXOCTVZ@postgres.railway.internal:5432/railway")
@@ -41,7 +46,7 @@ def create_tables():
     );
     """)
     conn.commit()
-    print("جداول با موفقیت ایجاد شدند!")
+    logger.info("جداول با موفقیت ایجاد شدند!")
 
 create_tables()
 
@@ -238,40 +243,40 @@ async def send_reply(update: Update, context: CallbackContext):
     reply = update.message.text.strip()
 
     if not reply:
-        await update.message.reply_text("پاسخ نمی‌تواند خالی باشد. لطفاً پاسخ خود را وارد کنید.")
+        await update.message.reply_text("پاسخ نمی‌تواند خالی باشد.")
         return SEND_REPLY
 
-    cursor.execute("""
-    UPDATE messages
-    SET reply = %s
-    WHERE id = %s
-    """, (reply, message_id))
+    cursor.execute("UPDATE messages SET reply = %s WHERE id = %s", (reply, message_id))
     conn.commit()
 
     await update.message.reply_text("پاسخ شما با موفقیت ارسال شد!")
     return CHOOSE_ACTION
 
-# مسیرهای مکالمه
+# پایان مکالمه
+async def exit_conversation(update: Update, context: CallbackContext):
+    await update.message.reply_text("خروج از ربات.")
+    return ConversationHandler.END
+
+# راه‌اندازی ربات
 conv_handler = ConversationHandler(
     entry_points=[CommandHandler("start", start)],
     states={
         LOGIN: [MessageHandler(filters.TEXT & ~filters.COMMAND, login)],
-        CHOOSE_ACTION: [
-            MessageHandler(filters.Regex("^ارسال پیام به معلم$"), send_message_to_teacher),
-            MessageHandler(filters.Regex("^مشاهده پیام‌ها$"), view_messages),
-            MessageHandler(filters.Regex("^خروج$"), start),
-        ],
-        SELECT_CATEGORY: [MessageHandler(filters.Regex("^\\d+$"), process_category_selection)],
-        SELECT_TEACHER: [MessageHandler(filters.Regex("^\\d+$"), process_teacher_selection)],
+        CHOOSE_ACTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, lambda update, context: update.message.text)],
+        SELECT_CATEGORY: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_category_selection)],
+        SELECT_TEACHER: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_teacher_selection)],
         SEND_MESSAGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_message)],
-        SELECT_MESSAGE_FOR_REPLY: [MessageHandler(filters.Regex("^\\d+$"), select_message_for_reply)],
+        SELECT_MESSAGE_FOR_REPLY: [MessageHandler(filters.TEXT & ~filters.COMMAND, select_message_for_reply)],
         SEND_REPLY: [MessageHandler(filters.TEXT & ~filters.COMMAND, send_reply)],
     },
-    fallbacks=[CommandHandler("start", start)],
-    allow_reentry=True
+    fallbacks=[CommandHandler("exit", exit_conversation)]
 )
 
-# اجرای ربات
-app = ApplicationBuilder().token("7589439068:AAEKY8-QbI77fClMaFeyHMHx4jo-XV2stIk").build()
-app.add_handler(conv_handler)
+async def main():
+    app = ApplicationBuilder().token("7589439068:AAEKY8-QbI77fClMaFeyHMHx4jo-XV2stIk").build()
+    app.add_handler(conv_handler)
+    await app.run_polling()
 
+# اجرا
+if __name__ == "__main__":
+    asyncio.run(main())
