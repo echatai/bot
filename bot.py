@@ -5,7 +5,7 @@ from psycopg2 import sql
 import bcrypt
 
 # اتصال به دیتابیس
-conn = psycopg2.connect("postgresql://postgres:ncHfrUsbklNeuzoPVUAqZhKeiPmAdZsw@postgres.railway.internal:5432/railway")
+conn = psycopg2.connect("postgresql://postgres:WwsdWwGXSFWbTbcyRvSchqpltUXOCTVZ@postgres.railway.internal:5432/railway")
 cursor = conn.cursor()
 
 # ایجاد جدول‌ها
