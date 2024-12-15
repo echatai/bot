@@ -1,5 +1,4 @@
 import logging
-import asyncio
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackContext, ConversationHandler, filters
 import psycopg2
@@ -212,10 +211,8 @@ async def view_messages(update: Update, context: CallbackContext):
         await update.message.reply_text("هیچ پیامی برای شما وجود ندارد.")
         return CHOOSE_ACTION
 
-    message_list = "\n\n".join([
-        f"پیام {idx + 1}: {msg[1]}\nپاسخ: {msg[2] if msg[2] else 'هنوز پاسخی داده نشده'}"
-        for idx, msg in enumerate(messages)
-    ])
+    message_list = "\n\n".join([f"پیام {idx + 1}: {msg[1]}\nپاسخ: {msg[2] if msg[2] else 'هنوز پاسخی داده نشده'}"
+                               for idx, msg in enumerate(messages)])
     await update.message.reply_text(f"پیام‌های دریافت‌شده:\n\n{message_list}\n\nبرای پاسخ به یک پیام، شماره آن را وارد کنید:")
     context.user_data['messages'] = messages
     return SELECT_MESSAGE_FOR_REPLY
@@ -243,40 +240,41 @@ async def send_reply(update: Update, context: CallbackContext):
     reply = update.message.text.strip()
 
     if not reply:
-        await update.message.reply_text("پاسخ نمی‌تواند خالی باشد.")
+        await update.message.reply_text("پاسخ نمی‌تواند خالی باشد. لطفاً پاسخ خود را وارد کنید.")
         return SEND_REPLY
 
-    cursor.execute("UPDATE messages SET reply = %s WHERE id = %s", (reply, message_id))
+    cursor.execute("""
+    UPDATE messages
+    SET reply = %s
+    WHERE id = %s
+    """, (reply, message_id))
     conn.commit()
 
     await update.message.reply_text("پاسخ شما با موفقیت ارسال شد!")
     return CHOOSE_ACTION
 
-# پایان مکالمه
-async def exit_conversation(update: Update, context: CallbackContext):
-    await update.message.reply_text("خروج از ربات.")
-    return ConversationHandler.END
+# استفاده از `ApplicationBuilder` برای اجرای ربات
+if __name__ == '__main__':
+    application = ApplicationBuilder().token("7589439068:AAEKY8-QbI77fClMaFeyHMHx4jo-XV2stIk").build()
 
-# راه‌اندازی ربات
-conv_handler = ConversationHandler(
-    entry_points=[CommandHandler("start", start)],
-    states={
-        LOGIN: [MessageHandler(filters.TEXT & ~filters.COMMAND, login)],
-        CHOOSE_ACTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, lambda update, context: update.message.text)],
-        SELECT_CATEGORY: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_category_selection)],
-        SELECT_TEACHER: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_teacher_selection)],
-        SEND_MESSAGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_message)],
-        SELECT_MESSAGE_FOR_REPLY: [MessageHandler(filters.TEXT & ~filters.COMMAND, select_message_for_reply)],
-        SEND_REPLY: [MessageHandler(filters.TEXT & ~filters.COMMAND, send_reply)],
-    },
-    fallbacks=[CommandHandler("exit", exit_conversation)]
-)
+    # اضافه کردن هندلرها
+    application.add_handler(ConversationHandler(
+        entry_points=[CommandHandler("start", start)],
+        states={
+            LOGIN: [MessageHandler(filters.TEXT, login)],
+            CHOOSE_ACTION: [
+                MessageHandler(filters.Regex('^(ارسال پیام به معلم)$'), send_message_to_teacher),
+                MessageHandler(filters.Regex('^(خروج)$'), lambda update, context: update.message.reply_text("خروج...")),
+                MessageHandler(filters.Regex('^(مشاهده پیام‌ها)$'), view_messages),
+            ],
+            SELECT_CATEGORY: [MessageHandler(filters.TEXT, process_category_selection)],
+            SELECT_TEACHER: [MessageHandler(filters.TEXT, process_teacher_selection)],
+            SEND_MESSAGE: [MessageHandler(filters.TEXT, process_message)],
+            SELECT_MESSAGE_FOR_REPLY: [MessageHandler(filters.TEXT, select_message_for_reply)],
+            SEND_REPLY: [MessageHandler(filters.TEXT, send_reply)],
+        },
+        fallbacks=[]
+    ))
 
-async def main():
-    app = ApplicationBuilder().token("7589439068:AAEKY8-QbI77fClMaFeyHMHx4jo-XV2stIk").build()
-    app.add_handler(conv_handler)
-    await app.run_polling()
-
-# اجرا
-if __name__ == "__main__":
-    asyncio.run(main())
+    # شروع ربات به صورت polling
+    application.run_polling()
