@@ -2,5 +2,5 @@ python-telegram-bot==20.5
 sqlalchemy==2.0
 pyTelegramBotAPI==4.12.0
 psycopg2-binary==2.9.7
-
+bcrypt
 
