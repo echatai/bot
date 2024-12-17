@@ -11,7 +11,9 @@ logger = logging.getLogger(__name__)
 # اتصال به دیتابیس
 conn = psycopg2.connect("postgresql://postgres:ECsstJOEBsayhuUmhnrewWooWKExKGbe@postgres.railway.internal:5432/railway")
 cursor = conn.cursor()
-
+async def logout(update: Update, context: CallbackContext):
+    await update.message.reply_text("شما از ربات خارج شدید. لطفاً برای ورود دوباره کد ملی و رمز عبور خود را وارد کنید.")
+    return LOGIN
 # ایجاد جدول‌ها
 def create_tables():
     try:
@@ -289,10 +291,7 @@ if __name__ == '__main__':
             LOGIN: [MessageHandler(filters.TEXT, login)],
             CHOOSE_ACTION: [
                 MessageHandler(filters.Regex('^(ارسال پیام به معلم)$'), send_message_to_teacher),
-                MessageHandler(filters.Regex('^(خروج از حساب)$'), lambda update, context: (
-    update.message.reply_text("خروج..."),
-    return LOGIN
-)),
+                MessageHandler(filters.Regex('^(خروج از اکانت)$'), logout),
                 MessageHandler(filters.Regex('^(مشاهده پیام‌ها)$'), view_messages),
             ],
             SELECT_CATEGORY: [MessageHandler(filters.TEXT, process_category_selection)],
