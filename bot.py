@@ -27,7 +27,7 @@ def create_tables():
         id SERIAL PRIMARY KEY,
         national_code TEXT UNIQUE NOT NULL,
         password_hash TEXT NOT NULL,
-        telegram_username TEXT UNIQUE,
+        telegram_username TEXT,
         category TEXT NOT NULL,
         first_name TEXT,
         last_name TEXT
