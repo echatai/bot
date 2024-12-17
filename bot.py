@@ -14,7 +14,8 @@ cursor = conn.cursor()
 
 # ایجاد جدول‌ها
 def create_tables():
-   # ایجاد جدول دانش‌آموزان
+    try:
+        # ایجاد جدول دانش‌آموزان
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS students (
                 id SERIAL PRIMARY KEY,
@@ -46,19 +47,30 @@ def create_tables():
                 name VARCHAR(100) UNIQUE NOT NULL
             );
         """)
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS messages (
-        id SERIAL PRIMARY KEY,
-        teacher_id INTEGER NOT NULL,
-        student_id INTEGER NOT NULL,
-        message TEXT NOT NULL,
-        reply TEXT,
-        FOREIGN KEY (teacher_id) REFERENCES teachers (id),
-        FOREIGN KEY (student_id) REFERENCES students (id)
-    );
-    """)
-    conn.commit()
-    logger.info("جداول با موفقیت ایجاد شدند!")
+
+        # ایجاد جدول پیام‌ها
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS messages (
+                id SERIAL PRIMARY KEY,
+                teacher_id INTEGER NOT NULL,
+                student_id INTEGER NOT NULL,
+                message TEXT NOT NULL,
+                reply TEXT,
+                FOREIGN KEY (teacher_id) REFERENCES teachers (id),
+                FOREIGN KEY (student_id) REFERENCES students (id)
+            );
+        """)
+
+        # Commit the changes
+        conn.commit()
+
+        # Log success
+        logger.info("جداول با موفقیت ایجاد شدند!")
+
+    except Exception as e:
+        # Rollback in case of an error
+        conn.rollback()
+        logger.error(f"خطا در ایجاد جداول: {e}")
 
 create_tables()
 
