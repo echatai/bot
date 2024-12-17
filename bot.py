@@ -107,7 +107,7 @@ async def login(update: Update, context: CallbackContext):
             await update.message.reply_text("ورود موفقیت‌آمیز بود! لطفاً یک گزینه را انتخاب کنید:",
                                             reply_markup=ReplyKeyboardMarkup([
                                                 ["ارسال پیام به معلم"],
-                                                ["خروج"]
+                                                ["خروج از اکانت"]
                                             ], one_time_keyboard=True))
             context.user_data['user_type'] = 'student'
             return CHOOSE_ACTION
@@ -122,7 +122,7 @@ async def login(update: Update, context: CallbackContext):
             await update.message.reply_text("ورود موفقیت‌آمیز بود! لطفاً یک گزینه را انتخاب کنید:",
                                             reply_markup=ReplyKeyboardMarkup([
                                                 ["مشاهده پیام‌ها"],
-                                                ["خروج"]
+                                                ["خروج از اکانت"]
                                             ], one_time_keyboard=True))
             context.user_data['user_type'] = 'teacher'
             return CHOOSE_ACTION
