@@ -9,7 +9,7 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 logger = logging.getLogger(__name__)
 
 # اتصال به دیتابیس
-conn = psycopg2.connect("postgresql://postgres:WwsdWwGXSFWbTbcyRvSchqpltUXOCTVZ@postgres.railway.internal:5432/railway")
+conn = psycopg2.connect("postgresql://postgres:PTJAhLwZOXISnZwUQHSqMxqrAlZQYDWj@postgres.railway.internal:5432/railway")
 cursor = conn.cursor()
 
 # ایجاد جدول‌ها
