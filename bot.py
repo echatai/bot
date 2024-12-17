@@ -289,7 +289,10 @@ if __name__ == '__main__':
             LOGIN: [MessageHandler(filters.TEXT, login)],
             CHOOSE_ACTION: [
                 MessageHandler(filters.Regex('^(ارسال پیام به معلم)$'), send_message_to_teacher),
-                MessageHandler(filters.Regex('^(خروج)$'), lambda update, context: update.message.reply_text("خروج...")),
+                MessageHandler(filters.Regex('^(خروج از حساب)$'), lambda update, context: (
+    update.message.reply_text("خروج..."),
+    return LOGIN
+)),
                 MessageHandler(filters.Regex('^(مشاهده پیام‌ها)$'), view_messages),
             ],
             SELECT_CATEGORY: [MessageHandler(filters.TEXT, process_category_selection)],
