@@ -9,30 +9,43 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 logger = logging.getLogger(__name__)
 
 # اتصال به دیتابیس
-conn = psycopg2.connect("postgresql://postgres:PTJAhLwZOXISnZwUQHSqMxqrAlZQYDWj@postgres.railway.internal:5432/railway")
+conn = psycopg2.connect("postgresql://postgres:qRoPLmVAenZFFyNFjSicmBKMDSIFIqAa@postgres.railway.internal:5432/railway")
 cursor = conn.cursor()
 
 # ایجاد جدول‌ها
 def create_tables():
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS students (
-        id SERIAL PRIMARY KEY,
-        national_code TEXT UNIQUE NOT NULL,
-        password_hash TEXT NOT NULL,
-        telegram_id TEXT UNIQUE
-    );
-    """)
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS teachers (
-        id SERIAL PRIMARY KEY,
-        national_code TEXT UNIQUE NOT NULL,
-        password_hash TEXT NOT NULL,
-        telegram_username TEXT,
-        category TEXT NOT NULL,
-        first_name TEXT,
-        last_name TEXT
-    );
-    """)
+   # ایجاد جدول دانش‌آموزان
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS students (
+                id SERIAL PRIMARY KEY,
+                national_code VARCHAR(20) UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                first_name VARCHAR(100) NOT NULL,
+                last_name VARCHAR(100) NOT NULL,
+                telegram_id BIGINT UNIQUE
+            );
+        """)
+
+        # ایجاد جدول معلمان
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS teachers (
+                id SERIAL PRIMARY KEY,
+                national_code VARCHAR(20) UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                first_name VARCHAR(100) NOT NULL,
+                last_name VARCHAR(100) NOT NULL,
+                category VARCHAR(50) NOT NULL,
+                telegram_username VARCHAR(100)
+            );
+        """)
+
+        # ایجاد جدول دسته‌ها
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS categories (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(100) UNIQUE NOT NULL
+            );
+        """)
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS messages (
         id SERIAL PRIMARY KEY,
