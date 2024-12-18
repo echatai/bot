@@ -107,6 +107,7 @@ async def login(update: Update, context: CallbackContext):
             await update.message.reply_text("ورود موفقیت‌آمیز بود! لطفاً یک گزینه را انتخاب کنید:",
                                             reply_markup=ReplyKeyboardMarkup([
                                                 ["ارسال پیام به معلم"],
+                                                ["مشاهده پیام‌های دریافتی"],
                                                 ["خروج از اکانت"]
                                             ], one_time_keyboard=True))
             context.user_data['user_type'] = 'student'
@@ -196,6 +197,36 @@ async def process_message(update: Update, context: CallbackContext):
     teacher_id = context.user_data.get('selected_teacher_id')
     telegram_id = update.effective_user.id
 
+    cursor.execute("SELECT id, first_name, last_name FROM students WHERE telegram_id = %s", (telegram_id,))
+    student = cursor.fetchone()
+
+    if not student:
+        await update.message.reply_text("شما به عنوان دانش‌آموز ثبت نشده‌اید.")
+        return CHOOSE_ACTION
+
+    student_id, first_name, last_name = student
+    message = update.message.text.strip()
+
+    if not message:
+        await update.message.reply_text("پیام نمی‌تواند خالی باشد. لطفاً یک پیام وارد کنید.")
+        return SEND_MESSAGE
+
+    # اضافه کردن اطلاعات دانش‌آموز به پیام
+    full_message = f"از طرف {first_name} {last_name}:\n{message}"
+    cursor.execute("""
+    INSERT INTO messages (teacher_id, student_id, message)
+    VALUES (%s, %s, %s)
+    """, (teacher_id, student_id, full_message))
+    conn.commit()
+
+    await update.message.reply_text("پیام شما با موفقیت ارسال شد!")
+    return CHOOSE_ACTION
+
+
+# مشاهده پیام‌های دریافتی دانش‌آموز
+async def view_student_messages(update: Update, context: CallbackContext):
+    telegram_id = update.effective_user.id
+
     cursor.execute("SELECT id FROM students WHERE telegram_id = %s", (telegram_id,))
     student = cursor.fetchone()
 
@@ -204,20 +235,25 @@ async def process_message(update: Update, context: CallbackContext):
         return CHOOSE_ACTION
 
     student_id = student[0]
-    message = update.message.text.strip()
-
-    if not message:
-        await update.message.reply_text("پیام نمی‌تواند خالی باشد. لطفاً یک پیام وارد کنید.")
-        return SEND_MESSAGE
-
     cursor.execute("""
-    INSERT INTO messages (teacher_id, student_id, message)
-    VALUES (%s, %s, %s)
-    """, (teacher_id, student_id, message))
-    conn.commit()
+    SELECT m.message, m.reply, t.first_name, t.last_name
+    FROM messages m
+    JOIN teachers t ON m.teacher_id = t.id
+    WHERE m.student_id = %s AND m.reply IS NOT NULL
+    """, (student_id,))
+    messages = cursor.fetchall()
 
-    await update.message.reply_text("پیام شما با موفقیت ارسال شد!")
+    if not messages:
+        await update.message.reply_text("هیچ پیامی دریافت نکرده‌اید.")
+        return CHOOSE_ACTION
+
+    message_list = "\n\n".join([
+        f"پیام: {msg[0]}\nپاسخ: {msg[1]}\nاز طرف معلم: {msg[2]} {msg[3]}"
+        for msg in messages
+    ])
+    await update.message.reply_text(f"پیام‌های دریافتی شما:\n\n{message_list}")
     return CHOOSE_ACTION
+
 
 # مشاهده پیام‌ها برای معلم‌ها
 async def view_messages(update: Update, context: CallbackContext):
@@ -291,6 +327,7 @@ if __name__ == '__main__':
             LOGIN: [MessageHandler(filters.TEXT, login)],
             CHOOSE_ACTION: [
                 MessageHandler(filters.Regex('^(ارسال پیام به معلم)$'), send_message_to_teacher),
+                MessageHandler(filters.Regex('^(مشاهده پیام‌های دریافتی)$'), view_student_messages), 
                 MessageHandler(filters.Regex('^(خروج از اکانت)$'), logout),
                 MessageHandler(filters.Regex('^(مشاهده پیام‌ها)$'), view_messages),
             ],
